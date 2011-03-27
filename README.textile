@@ -1,0 +1,12 @@
+h2. About
+
+The Tumblr Import module allows you to import your tumblr blog into PyroCMS. 
+
+h2. Usage
+
+# Upload the tumblrimport directory to addons/modules
+# Go to http://www.yourwebsite.com/admin/tumblrimport
+
+h2. License
+
+The galleries module is licensed under the Apache v2.0 license.
