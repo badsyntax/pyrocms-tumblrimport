@@ -34,6 +34,11 @@ class Admin extends Admin_Controller
 			'label' => 'Add redirects',
 			'rules' => 'trim|numeric'
 		),
+		array(
+			'field' => 'pages',
+			'label' => 'Import pages',
+			'rules' => 'trim|numeric'
+		),
 	);
 	
 	/**
@@ -48,10 +53,10 @@ class Admin extends Admin_Controller
 		$this->load->helper('html');
 		$this->load->model('blog/blog_categories_m');
 		$this->load->model('blog/blog_m');
-                $this->load->model('redirects/redirect_m');
+		$this->load->model('redirects/redirect_m');
 		$this->load->library('form_validation');
 		$this->lang->load('blog/blog');
-                $this->lang->load('redirects/redirects');
+		$this->lang->load('redirects/redirects');
 		$this->template->set_partial('shortcuts', 'admin/partials/shortcuts');
 	}
 
@@ -61,15 +66,19 @@ class Admin extends Admin_Controller
 	 * @param string url The URL to check
 	 * @return bool
 	 */
-	public function _check_url($url = '')
+	public function _check_url(&$url)
 	{
 		if (!preg_match('/^https?:\/\/.+/', $url))
 		{
-			$this->form_validation->set_message('_check_url', 'Invalid blog URL');
+			$this->form_validation->set_message('_check_url', 'Invalid blog URL.');
+
 			return FALSE;
 		}
 
-		return TRUE;
+		// Strip end slashes
+		$url = preg_replace('/[\/]+$/', '', $url);
+
+		return true;
 	}
 
 	/**
@@ -82,25 +91,26 @@ class Admin extends Admin_Controller
 
 		if ($this->form_validation->run())
 		{
-			// Strip end slashes
-			$blog_url = preg_replace('/[\/]+$/', '', $this->input->post('blog_url'));
+			$result = array();
 
-			// Try load the remote XML feed into memory
-			$posts = $this->load_posts(sprintf('%s/api/read?num=50', $blog_url));
+			$blog_url = $this->input->post('blog_url');
 
-			// Try save the posts
-			$result = $this->save_posts($posts, $this->input->post('status'), $blog_url);
+			$this->import_posts($blog_url, sprintf('%s/api/read?num=50', $blog_url), $result);
 
-			// Skipped posts
-			$skipped = $result['skipped'] > 0 ? sprintf('%s skipped posts.', $result['skipped']) : '';
-			// Skipped duplicate posts
-			$duplicates = $result['dupes'] > 0 ? sprintf('%s duplicates not saved.', $result['dupes']) : '';
-			// Redrects
-			$redirects = $result['redirects'] > 0 ? sprintf('%s redirects saved.', $result['redirects']) : '';
-			// Combine stats
-			$flashmsg = sprintf('%s posts saved. %s %s %s', $result['saved'], $skipped, $duplicates, $redirects);
+			if (!!$this->input->post('pages') === TRUE)
+			{
+				$this->import_pages($blog_url, sprintf('%s/api/pages', $blog_url), $result);
+			}
+
+			$flashmsg = sprintf('%s posts saved. %s %s %s', 
+				$result['saved'], 
+				$result['skipped'], 
+				$result['duplicates'], 
+				$result['redirects']
+			);
 
 			$this->session->set_flashdata($result['saved'] > 0 ? 'success' : 'error', $flashmsg);
+
 			redirect('admin/tumblrimport');
 		}
 
@@ -111,17 +121,21 @@ class Admin extends Admin_Controller
 		}
 
 		// Default values
-		if (!$data->blog_url)
+		if ($data->blog_url === FALSE)
 		{
 			$data->blog_url = 'http://';
 		}
-		if (!$data->status)
+		if ($data->status === FALSE)
 		{
 			$data->status = 'draft';
 		}
-		if (!$data->redirects)
+		if ($data->redirects === FALSE)
 		{
 			$data->redirects = '1';
+		}
+		if ($data->pages === FALSE)
+		{
+			$data->pages = '1';
 		}
 
 		// Load the view
@@ -130,8 +144,32 @@ class Admin extends Admin_Controller
 			->set('data', $data)
 			->build('admin/index');
 	}
+	
+	private function import_posts($blog_url = NULL, $feed_url = NULL, &$result)
+	{
+		// Try load the remote post XML feed
+		$posts = $this->load_posts_feed($feed_url);
 
-	private function load_posts($feed_url = NULL)
+		// Try save the posts
+		$result = $this->save_posts($posts, $this->input->post('status'), $blog_url);
+
+		// Skipped posts
+		$result['skipped'] = $result['skipped'] > 0 ? sprintf('%s skipped posts.', $result['skipped']) : '';
+
+		// Skipped duplicate posts
+		$result['duplicates'] = $result['dupes'] > 0 ? sprintf('%s duplicates not saved.', $result['dupes']) : '';
+
+		// Redrects
+		$result['redirects'] = $result['redirects'] > 0 ? sprintf('%s redirects saved.', $result['redirects']) : '';
+	}
+
+	private function import_pages($blog_url = NULL, $feed_url = NULL)
+	{
+		// Try load the remote pages XML feed
+		//$pages = $this->load_pages($feed_url);
+	}
+
+	private function load_posts_feed($feed_url = NULL)
 	{
 		if (!$xml = @file_get_contents($feed_url))
 		{
