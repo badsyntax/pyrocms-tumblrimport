@@ -2,6 +2,8 @@
 
 <p>This script will use your tumblr blog XML feed to import posts, pages and tags into PyroCMS.</p>
 
+<p><strong>Note:</strong> Video posts will not be imported.</p>
+
 <?php echo form_open(uri_string(), 'class="crud"'); ?>
 	<ul>
 		<li class="<?php echo alternator('', 'even'); ?>">
@@ -12,7 +14,25 @@
 			<small><em>(eg: http://myblog.tumblr.com)</em></small>
 		</li>
 		<li class="<?php echo alternator('', 'even'); ?>">
-			<label for="status">Publish status</label>
+			<label for="posts">
+				Import posts
+			</label>
+			<?php echo form_dropdown('posts', array(1 => 'Yes', 0 => 'No'), $data->posts) ?>
+		</li>
+		<li class="<?php echo alternator('', 'even'); ?>">
+			<label for="pages">
+				Import pages
+			</label>
+			<?php echo form_dropdown('pages', array(1 => 'Yes', 0 => 'No'), $data->pages) ?>
+		</li>
+		<li class="<?php echo alternator('', 'even'); ?>">
+			<label for="categories">
+				Import tags as cateogories
+			</label>
+			<?php echo form_dropdown('categories', array(1 => 'Yes', 0 => 'No'), $data->categories) ?>
+		</li>
+		<li class="<?php echo alternator('', 'even'); ?>">
+			<label for="status">Post/page publish status</label>
 			<?php echo form_dropdown('status', array('draft' => lang('blog_draft_label'), 'live' => lang('blog_live_label')), $data->status) ?>
 		</li>
 		<li class="<?php echo alternator('', 'even'); ?>">
@@ -21,12 +41,6 @@
 			</label>
 			<?php echo form_dropdown('redirects', array(1 => 'Yes', 0 => 'No'), $data->redirects) ?>
 		</li>	
-		<li class="<?php echo alternator('', 'even'); ?>">
-			<label for="pages">
-				Import pages
-			</label>
-			<?php echo form_dropdown('pages', array(1 => 'Yes', 0 => 'No'), $data->pages) ?>
-		</li>
 	</ul>
 	<div class="buttons float-right padding-top">
 		<button class="button" value="save" name="btnAction" type="submit">

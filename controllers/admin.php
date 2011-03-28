@@ -22,22 +22,32 @@ class Admin extends Admin_Controller
 		array(
 			'field' => 'blog_url',
 			'label' => 'Tumblr blog URL',
-			'rules' => 'trim|max_length[255]|required||callback__check_url'
+			'rules' => 'trim|max_length[255]|required|callback__check_url'
 		),
 		array(
 			'field' => 'status',
 			'label' => 'lang:blog_status_label',
-			'rules' => 'trim|alpha'
+			'rules' => 'trim|alpha|required'
 		),
 		array(
 			'field' => 'redirects',
 			'label' => 'Add redirects',
-			'rules' => 'trim|numeric'
+			'rules' => 'trim|numeric|required'
+		),
+		array(
+			'field' => 'posts',
+			'label' => 'Import posts',
+			'rules' => 'trim|numeric|required'
+		),
+		array(
+			'field' => 'categories',
+			'label' => 'Import tags as categories',
+			'rules' => 'trim|numeric|required'
 		),
 		array(
 			'field' => 'pages',
 			'label' => 'Import pages',
-			'rules' => 'trim|numeric'
+			'rules' => 'trim|numeric|required'
 		),
 	);
 	
@@ -92,22 +102,22 @@ class Admin extends Admin_Controller
 
 		if ($this->form_validation->run())
 		{
-			$msgdata = array();
+			$msg = array();
 
 			$blog_url = $this->input->post('blog_url');
 
-			$this->import_posts($blog_url, sprintf('%s/api/read?num=50', $blog_url), $msgdata);
+			$this->import_posts($blog_url, sprintf('%s/api/read?num=50', $blog_url), $msg);
 
 			if (!!$this->input->post('pages') === TRUE)
 			{
-				$this->import_pages($blog_url, sprintf('%s/api/pages', $blog_url), $msgdata);
+				$this->import_pages($blog_url, sprintf('%s/api/pages', $blog_url), $msg);
 			}
 
 			$flashmsg = sprintf('%s posts saved. %s %s %s', 
-				$msgdata['saved'], 
-				$msgdata['skipped'], 
-				$msgdata['duplicates'], 
-				$msgdata['redirects']
+				$msg['saved'], 
+				$msg['skipped'], 
+				$msg['duplicates'], 
+				$msg['redirects']
 			);
 
 			$this->session->set_flashdata($result['saved'] > 0 ? 'success' : 'error', $flashmsg);
@@ -122,22 +132,12 @@ class Admin extends Admin_Controller
 		}
 
 		// Default values
-		if ($data->blog_url === FALSE)
-		{ 
-			$data->blog_url = 'http://'; 
-		}
-		if ($data->status === FALSE) 
-		{ 
-			$data->status = 'draft'; 
-		}
-		if ($data->redirects === FALSE) 
-		{ 
-			$data->redirects = '1'; 
-		}
-		if ($data->pages === FALSE) 
-		{ 
-			$data->pages = '1'; 
-		}
+		$this->_default($data->blog_url, 'http://', FALSE);
+		$this->_default($data->status, 'draft', FALSE);
+		$this->_default($data->redirects, '1', FALSE);
+		$this->_default($data->posts, '1', FALSE);
+		$this->_default($data->pages, '1', FALSE);
+		$this->_default($data->categories, '1', FALSE);
 
 		// Load the view
 		$this->template
@@ -145,8 +145,16 @@ class Admin extends Admin_Controller
 			->set('data', $data)
 			->build('admin/index');
 	}
+
+	private function _default(&$var, $val, $default)
+	{
+		if ($val === $default)
+		{
+			$var = $val;
+		}
+	}
 	
-	private function import_posts($blog_url = NULL, $feed_url = NULL, &$msgdata)
+	private function import_posts($blog_url = NULL, $feed_url = NULL, &$msg)
 	{
 		// Try load the remote post XML feed
 		$posts = $this->load_posts_feed($feed_url);
@@ -160,10 +168,10 @@ class Admin extends Admin_Controller
 		// Try save the posts
 		$result = $this->save_posts($posts, $this->input->post('status'), $blog_url);
 	
-		// Add result flashmsg data
-		$msgdata['skipped'] = $result['skipped'] > 0 ? sprintf('%s skipped posts.', $result['skipped']) : '';
-		$msgdata['duplicates'] = $result['dupes'] > 0 ? sprintf('%s duplicates not saved.', $result['dupes']) : '';
-		$msgdata['redirects'] = $result['redirects'] > 0 ? sprintf('%s redirects saved.', $result['redirects']) : '';
+		// Add flashmsg data
+		$msg['skipped'] = $result['skipped'] > 0 ? sprintf('%s skipped posts.', $result['skipped']) : '';
+		$msg['duplicates'] = $result['dupes'] > 0 ? sprintf('%s duplicates not saved.', $result['dupes']) : '';
+		$msg['redirects'] = $result['redirects'] > 0 ? sprintf('%s redirects saved.', $result['redirects']) : '';
 	}
 
 	private function import_pages($blog_url = NULL, $feed_url = NULL)
