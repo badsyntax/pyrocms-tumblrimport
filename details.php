@@ -21,15 +21,16 @@ class Module_TumblrImport extends Module {
 
 	public function install()
 	{
+		return TRUE;
 	}
 
 	public function uninstall()
 	{
+		return TRUE;
 	}
 
 	public function upgrade($old_version)
 	{
-		// Your Upgrade Logic
 		return TRUE;
 	}
 
