@@ -12,7 +12,7 @@
 			<small><em>(eg: http://myblog.tumblr.com)</em></small>
 		</li>
 		<li class="<?php echo alternator('', 'even'); ?>">
-			<label for="status">Post status</label>
+			<label for="status">Publish status</label>
 			<?php echo form_dropdown('status', array('draft' => lang('blog_draft_label'), 'live' => lang('blog_live_label')), $data->status) ?>
 		</li>
 		<li class="<?php echo alternator('', 'even'); ?>">
@@ -21,6 +21,12 @@
 			</label>
 			<?php echo form_dropdown('redirects', array(1 => 'Yes', 0 => 'No'), $data->redirects) ?>
 		</li>	
+		<li class="<?php echo alternator('', 'even'); ?>">
+			<label for="pages">
+				Import pages
+			</label>
+			<?php echo form_dropdown('pages', array(1 => 'Yes', 0 => 'No'), $data->pages) ?>
+		</li>
 	</ul>
 	<div class="buttons float-right padding-top">
 		<button class="button" value="save" name="btnAction" type="submit">

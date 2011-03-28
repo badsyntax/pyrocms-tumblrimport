@@ -54,6 +54,7 @@ class Admin extends Admin_Controller
 		$this->load->model('blog/blog_categories_m');
 		$this->load->model('blog/blog_m');
 		$this->load->model('redirects/redirect_m');
+		$this->load->model('pages/pages_m');
 		$this->load->library('form_validation');
 		$this->lang->load('blog/blog');
 		$this->lang->load('redirects/redirects');
@@ -91,22 +92,22 @@ class Admin extends Admin_Controller
 
 		if ($this->form_validation->run())
 		{
-			$result = array();
+			$msgdata = array();
 
 			$blog_url = $this->input->post('blog_url');
 
-			$this->import_posts($blog_url, sprintf('%s/api/read?num=50', $blog_url), $result);
+			$this->import_posts($blog_url, sprintf('%s/api/read?num=50', $blog_url), $msgdata);
 
 			if (!!$this->input->post('pages') === TRUE)
 			{
-				$this->import_pages($blog_url, sprintf('%s/api/pages', $blog_url), $result);
+				$this->import_pages($blog_url, sprintf('%s/api/pages', $blog_url), $msgdata);
 			}
 
 			$flashmsg = sprintf('%s posts saved. %s %s %s', 
-				$result['saved'], 
-				$result['skipped'], 
-				$result['duplicates'], 
-				$result['redirects']
+				$msgdata['saved'], 
+				$msgdata['skipped'], 
+				$msgdata['duplicates'], 
+				$msgdata['redirects']
 			);
 
 			$this->session->set_flashdata($result['saved'] > 0 ? 'success' : 'error', $flashmsg);
@@ -122,20 +123,20 @@ class Admin extends Admin_Controller
 
 		// Default values
 		if ($data->blog_url === FALSE)
-		{
-			$data->blog_url = 'http://';
+		{ 
+			$data->blog_url = 'http://'; 
 		}
-		if ($data->status === FALSE)
-		{
-			$data->status = 'draft';
+		if ($data->status === FALSE) 
+		{ 
+			$data->status = 'draft'; 
 		}
-		if ($data->redirects === FALSE)
-		{
-			$data->redirects = '1';
+		if ($data->redirects === FALSE) 
+		{ 
+			$data->redirects = '1'; 
 		}
-		if ($data->pages === FALSE)
-		{
-			$data->pages = '1';
+		if ($data->pages === FALSE) 
+		{ 
+			$data->pages = '1'; 
 		}
 
 		// Load the view
@@ -145,31 +146,62 @@ class Admin extends Admin_Controller
 			->build('admin/index');
 	}
 	
-	private function import_posts($blog_url = NULL, $feed_url = NULL, &$result)
+	private function import_posts($blog_url = NULL, $feed_url = NULL, &$msgdata)
 	{
 		// Try load the remote post XML feed
 		$posts = $this->load_posts_feed($feed_url);
+		
+		if (!$posts)
+		{	
+			$this->session->set_flashdata('error', 'No posts were found!');
+			redirect('admin/tumblrimport');
+		}
 
 		// Try save the posts
 		$result = $this->save_posts($posts, $this->input->post('status'), $blog_url);
-
-		// Skipped posts
-		$result['skipped'] = $result['skipped'] > 0 ? sprintf('%s skipped posts.', $result['skipped']) : '';
-
-		// Skipped duplicate posts
-		$result['duplicates'] = $result['dupes'] > 0 ? sprintf('%s duplicates not saved.', $result['dupes']) : '';
-
-		// Redrects
-		$result['redirects'] = $result['redirects'] > 0 ? sprintf('%s redirects saved.', $result['redirects']) : '';
+	
+		// Add result flashmsg data
+		$msgdata['skipped'] = $result['skipped'] > 0 ? sprintf('%s skipped posts.', $result['skipped']) : '';
+		$msgdata['duplicates'] = $result['dupes'] > 0 ? sprintf('%s duplicates not saved.', $result['dupes']) : '';
+		$msgdata['redirects'] = $result['redirects'] > 0 ? sprintf('%s redirects saved.', $result['redirects']) : '';
 	}
 
 	private function import_pages($blog_url = NULL, $feed_url = NULL)
 	{
 		// Try load the remote pages XML feed
-		//$pages = $this->load_pages($feed_url);
+		$pages = $this->load_pages_feed($feed_url);
+
+		if (!$pages)
+		{
+			return;
+		}
+
+		// Try save the pages
+		$result = $this->save_pages($pages, $this->input->post('status'), $blog_url);
+	}
+
+	private function load_pages_feed($feed_url = NULL)
+	{
+		$data = (array) $this->load_feed($feed_url);
+
+		return $data['pages']['page'];
 	}
 
 	private function load_posts_feed($feed_url = NULL)
+	{
+		$data = (array) $this->load_feed($feed_url);
+
+		$posts = (array) $data['posts'];
+			
+		if (!$posts)
+		{
+			return array();
+		}
+		
+		return $posts['post'];
+	}
+
+	private function load_feed($feed_url = NULL)
 	{
 		if (!$xml = @file_get_contents($feed_url))
 		{
@@ -177,21 +209,42 @@ class Admin extends Admin_Controller
 			redirect('admin/tumblrimport');
 		}
 
-		if (!$xml_array = (array) @simplexml_load_string($xml, 'SimpleXMLElement', LIBXML_NOCDATA) )
+		if (!$xml_array = @simplexml_load_string($xml, 'SimpleXMLElement', LIBXML_NOCDATA) )
 		{
 			$this->session->set_flashdata('error', 'Error parsing the XML feed.');
 			redirect('admin/tumblrimport');
 		}
 
-		$posts = (array) $xml_array['posts'];
-			
-		if (!$posts)
-		{
-			$this->session->set_flashdata('error', 'No posts were found!');
-			redirect('admin/tumblrimport');
-		}
+		return $xml_array;
+	}
 
-		return $posts['post'];
+	private function save_pages($pages = array(), $statues = 'draft', $blog_url = '')
+	{
+		$saved = $duplicates = $redirects = 0;
+
+		foreach($pages as $page)
+		{
+			die(print_r($page));
+			$title = $page['@attributes']['title'];
+	
+			die($title);
+			$this->pages_m->create(array(
+				'parent_id' => 0,
+				'title' => '',
+				'slug' => '',
+				'status' => $status,
+				'navigation_group_id' => 0,
+				'meta_title' => '',
+				'meta_keywords' => '',
+				'meta_description' => '',
+				'layout_id' => 1,
+				'css' => '',
+				'js' => '',
+				'use_revision_id' => '',
+				'compare_revision_1' => '',
+				'compare_revision_2' => '',
+			));
+		}
 	}
 
 	private function save_posts($posts = array(), $status = 'draft', $blog_url = '')
@@ -250,7 +303,7 @@ class Admin extends Admin_Controller
 
 			$tags = (array) @$data['tag'];
 
-			$category_id = $tags ? $this->save_tags($tags) : 0;
+			$category_id = $tags ? $this->save_post_tags($tags) : 0;
 		
 			$result = $this->save_post(array(
 				'title' => $title,
@@ -280,7 +333,7 @@ class Admin extends Admin_Controller
 		);
 	}
 
-	private function save_tags($tags = array())
+	private function save_post_tags($tags = array())
 	{
 		// Use the first tag for the category.
 		// (PyroCMS does not support multiple categories.)
