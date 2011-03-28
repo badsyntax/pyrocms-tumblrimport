@@ -10,4 +10,4 @@ h2. Usage
 
 h2. License
 
-The galleries module is licensed under the Apache v2.0 license.
+The TumblrImport module is licensed under the Apache v2.0 license.
