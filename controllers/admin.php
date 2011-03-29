@@ -1,8 +1,7 @@
 <?php if (!defined('BASEPATH')) exit('No direct script access allowed');
 /**
  *
- * The Tumblr Import module will import posts, pages and tags 
- * from a tubmlr blog XML feed into PyroCMS.
+ * The Tumblr Import module will import posts and tags from a tumblr XML feed.
  *
  * @author	Richard Willis
  * @package	PyroCMS
@@ -75,6 +74,7 @@ class Admin extends Admin_Controller
 	}
 
 	/**
+	 * Main request
 	 * @access public
 	 * @return void
 	 */
@@ -103,7 +103,6 @@ class Admin extends Admin_Controller
 			);
 
 			$this->session->set_flashdata($result['saved'] ? 'success' : 'error', $flashmsg);
-
 			redirect('admin/tumblrimport');
 		}
 
@@ -125,6 +124,11 @@ class Admin extends Admin_Controller
 			->build('admin/index');
 	}
 
+	/**
+	 * Set a default value
+	 * @access private
+	 * @return void
+	 */
 	private function _default(&$var, $val, $default)
 	{
 		if ($var === $default)
