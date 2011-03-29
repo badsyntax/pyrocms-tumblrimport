@@ -1,115 +1,65 @@
-<?php
+<?php if (!defined('BASEPATH')) exit('No direct script access allowed');
 
-class Tumblr extends Importer
+class Importer_Driver_Tumblr extends Importer_Driver
 {
-	public function import_posts()
+	public function import_posts($config=array())
 	{
-		// Try load the remote post XML feed
-		$feed = $this->load_feed($this->feeds['posts']);
-
-		$posts = (array) $feed->posts;
-		$posts = $posts['post'];
-
-		if (!$posts)
-		{	
-			$this->ci->session->set_flashdata('error', 'No posts were found!');
-			redirect('admin/tumblrimport');
+		if (!$data = @simplexml_load_file($this->config['feeds']['posts'], 'SimpleXMLElement', LIBXML_NOCDATA))
+		{
+			return FALSE;
 		}
-		
-		// Try save the posts
-		return $this->save_posts($posts, $this->ci->input->post('status'));
+
+		$data = (array) $data->posts;
+		$posts = $data['post'];
+
+		return array(
+			'saved' => $this->save_posts($posts),
+			'total_posts' => count($posts)
+		);
 	}
 
-	public function import_pages()
+	// Posts types: text, quote, photo, link, chat, video, audio
+	public function save_posts($posts = array())
 	{
-		// Try load the remote pages XML feed
-		$feed = (array) $this->load_feed($this->feeds['pages']);
-		$pages = $feed['pages']['page'];
-
-		if (!$pages)
-		{
-			return;
-		}
-
-		// Try save the pages
-		$result = $this->save_pages($pages, $this->ci->input->post('status'));
-	}
-
-	public function load_feed($feed_url = NULL)
-	{
-		if (!$xml = @file_get_contents($feed_url))
-		{
-			$this->ci->session->set_flashdata('error', sprintf('Error loading XML feed at location: %s. Have you entered the URL correctly?', $feed_url));
-			redirect('admin/tumblrimport');
-		}
-
-		if (!$data = @simplexml_load_string($xml, 'SimpleXMLElement', LIBXML_NOCDATA) )
-		{
-			$this->ci->session->set_flashdata('error', 'Error parsing the XML feed.');
-			redirect('admin/tumblrimport');
-		}
-
-		return $data;
-	}
-
-	public function save_pages($pages = array(), $statues = 'draft')
-	{
-		$saved = $duplicates = $redirects = 0;
-
-		foreach($pages as $page)
-		{
-			die(print_r($page));
-			$title = $page['@attributes']['title'];
-	
-			die($title);
-			$this->ci->pages_m->create(array(
-				'parent_id' => 0,
-				'title' => '',
-				'slug' => '',
-				'status' => $status,
-				'navigation_group_id' => 0,
-				'meta_title' => '',
-				'meta_keywords' => '',
-				'meta_description' => '',
-				'layout_id' => 1,
-				'css' => '',
-				'js' => '',
-				'use_revision_id' => '',
-				'compare_revision_1' => '',
-				'compare_revision_2' => '',
-			));
-		}
-	}
-
-	public function save_page($input) { }
-
-	public function save_posts($posts = array(), $status = 'draft')
-	{
-		$saved = $duplicates = $skipped = $redirects = 0;
+		$saved = 0;
 
 		foreach($posts as $data)
 		{
 			$data = (array) $data;
 
-			$title = NULL;
-
 			// Quote post
 			if (isset($data['quote-text']))
 			{
-				$title = substr($data['quote-text'], 0, 128);
+				$title = $data['quote-text'];
 				$intro = $body = $data['quote-text'].' - '.$data['quote-source'];
 			}
-			// Text quote
-			else if (isset($data['regular-title']))
+			// Text post with title
+			else if (isset($data['regular-title']) AND isset($data['regular-body']))
 			{
 				$title = $data['regular-title'];
 				$intro = $body = $data['regular-body'];
 			}
-			// Link post
-			else if (isset($data['link-text']))
+			// Text post with no body
+			else if (isset($data['regular-title']))
+			{
+				$title = $intro = $body = $data['regular-title'];
+			}
+			// Text post with no title
+			else if (isset($data['regular-body']))
+			{
+				$title = $intro = $body = $data['regular-body'];
+			}
+			// Link post with text
+			else if (isset($data['link-url']) AND isset($data['link-text']))
 			{
 				$title = $data['link-text'];
 				$intro = $body = anchor($data['link-url'], $data['link-url']).' '.@$data['link-description'];
+			}
+			// Link post with no text
+			else if (isset($data['link-url']))
+			{
+				$title = $data['link-url'];
+				$intro = $body = anchor($data['link-url'], $data['link-url']);
 			}
 			// Chat post
 			else if (isset($data['conversation-title']))
@@ -117,61 +67,77 @@ class Tumblr extends Importer
 				$title = $data['conversation-title'];
 				$intro = $body = $data['conversation-text'];
 			}
-			// TODO: Photo post
+			// Question post
+			else if (isset($data['question']) AND isset($data['answer']))
+			{
+				$title = 'Question: '.$data['question'];
+				$intro = $body = $data['answer'];
+			}
+			// Audio post
+			else if (isset($data['audio-caption']) AND isset($data['audio-player']))
+			{
+				$title = $data['audio-caption'];
+				$intro = $body = $title.' '.$data['audio-player'];
+			}
+			// Photo post with title
+			else if (isset($data['photo-caption']) AND isset($data['photo-url']))
+			{
+				$title = $data['photo-caption'];
+				$intro = $body = img($data['photo-url'][0]);
+			}
+			// Photo post with no title
 			else if (isset($data['photo-url']))
 			{
+				$title = 'Photo on '.date('d/m/y', $data['@attributes']['unix-timestamp']);
+				$intro = $body = img($data['photo-url'][0]);
 			}
-
-			if ($title === NULL)
+			// Video embed post
+			else if (isset($data['video-caption']) AND isset($data['video-player']))
 			{
-				$skipped++;
-
+				$title = $data['video-caption'];
+				$intro = $body = $data['video-player'];
+			}
+			// Unsupported video post
+			else {
 				continue;
 			}
-			
-			$post = $this->ci->db->get_where('blog', array('title' => $title))->result_array();
-			if (count($post))
-			{
-				$duplicates++;
 
+			// Format the post title
+			$title = substr(strip_tags($title), 0, 100);
+
+			// Does the post already exist?
+			if (count($this->ci->db->get_where('blog', array('title' => $title))->result_array()))
+			{
 				continue;
 			}
 
 			$tags = (array) @$data['tag'];
 
-			$category_id = $tags ? $this->save_post_tags($tags) : 0;
-		
+			// Save post tag as category
+			$category_id = ($tags && $this->config->categories) ? $this->save_post_tags($tags) : 0;
+	
+			// Try save the post	
 			$result = $this->save_post(array(
 				'title' => $title,
 				'slug' => $data['@attributes']['slug'],
 				'category_id' => $category_id,
 				'intro' => $intro,
 				'body' => $body,
-				'status' => $status,
+				'status' => $this->config->status,
 				'created_on' => $data['@attributes']['unix-timestamp']
 			));
 
 			if ($result)
 			{
-				if ($this->ci->input->post('redirects'))
-				{
-					$redirects += $this->save_redirects($result, $data);
-				}
 				$saved += (int) !!$result;
 			}
 		}
 
-		return array(
-			'saved' => $saved,
-			'dupes' => $duplicates,
-			'skipped' => $skipped,
-			'redirects' => $redirects
-		);
+		return $saved;
 	}
 
-	public function save_post($data = array())
+	public function save_post($data=array())
 	{
-		// Try inset a new blog post
 		$id = $this->ci->blog_m->insert($data);
 
 		if ($id)
@@ -182,58 +148,18 @@ class Tumblr extends Importer
 		return false;
 	}
 
-	public function save_post_tags($tags = array())
+	public function save_post_tags($tags=array())
 	{
-		// Use the first tag for the category.
-		// (PyroCMS does not support multiple categories.)
+		// Use the first tag for the category
 		$category = $tags[0];
 
-		// Save the category		
 		if (!$this->ci->blog_categories_m->check_title($category))
 		{	
 			$this->ci->blog_categories_m->insert(array('title' => $category));
 		}
 
-		// Get the category ID from the db
 		$category_db = current($this->ci->db->get_where('blog_categories', array('slug' => url_title($category)))->result_array());
 
 		return $category_db['id'];
-	}
-
-	public function save_redirects($id = 0, $data = array())
-	{
-		$db_post = $this->ci->blog_m->get($id);
-
-		// URL of the blog post: FIXME for pages
-		$redirect_to = 'blog/'.date('Y/m', $db_post->created_on).'/'.$db_post->slug;
-
-		$total = 0;
-
-		if (isset($data['@attributes']['url']))
-		{
-			$redirect = array(
-				'from' => str_replace($this->blog_url.'/', '', $data['@attributes']['url']),
-				'to' => $redirect_to
-			);
-			if  (!count($this->ci->db->where(array('from' => $redirect['from']))->get('redirects')->row()))
-			{
-				$this->ci->redirect_m->insert($redirect);
-				$total++;
-			}
-		}
-		if (isset($data['@attributes']['url-with-slug']))
-		{
-			$redirect = array(
-				'from' => str_replace($this->blog_url.'/', '', $data['@attributes']['url-with-slug']),
-				'to' => $redirect_to
-			);
-			if  (!count($this->ci->db->where(array('from' => $redirect['from']))->get('redirects')->row()))
-			{
-				$this->ci->redirect_m->insert($redirect);
-				$total++;
-			}
-		}
-
-		return $total;
 	}
 }
