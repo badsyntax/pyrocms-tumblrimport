@@ -88,7 +88,7 @@ class Importer_Driver_Tumblr extends Importer_Driver
 			// Photo post with no title
 			else if (isset($data['photo-url']))
 			{
-				$title = 'Photo on '.date('d/m/y', $data['@attributes']['unix-timestamp']);
+				$title = 'Photo on '.$data['@attributes']['unix-timestamp'];
 				$intro = $body = img($data['photo-url'][0]);
 			}
 			// Video embed post
@@ -106,7 +106,7 @@ class Importer_Driver_Tumblr extends Importer_Driver
 			$title = substr(strip_tags($title), 0, 100);
 
 			// Does the post already exist?
-			if (count($this->ci->db->get_where('blog', array('title' => $title))->result_array()))
+			if (count($this->ci->db->get_where('blog', array('title' => $title))->row()))
 			{
 				continue;
 			}
@@ -114,8 +114,8 @@ class Importer_Driver_Tumblr extends Importer_Driver
 			$tags = (array) @$data['tag'];
 
 			// Save post tag as category
-			$category_id = ($tags && $this->config->categories) ? $this->save_post_tags($tags) : 0;
-	
+			$category_id = ($tags && $this->config['categories']) ? $this->save_post_tags($tags) : 0;
+
 			// Try save the post	
 			$result = $this->save_post(array(
 				'title' => $title,
@@ -123,7 +123,7 @@ class Importer_Driver_Tumblr extends Importer_Driver
 				'category_id' => $category_id,
 				'intro' => $intro,
 				'body' => $body,
-				'status' => $this->config->status,
+				'status' => $this->config['status'],
 				'created_on' => $data['@attributes']['unix-timestamp']
 			));
 
