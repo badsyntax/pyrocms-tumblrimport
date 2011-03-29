@@ -30,25 +30,10 @@ class Admin extends Admin_Controller
 			'rules' => 'trim|alpha|required'
 		),
 		array(
-			'field' => 'redirects',
-			'label' => 'Add redirects',
-			'rules' => 'trim|numeric|required'
-		),
-		array(
-			'field' => 'posts',
-			'label' => 'Import posts',
-			'rules' => 'trim|numeric|required'
-		),
-		array(
 			'field' => 'categories',
 			'label' => 'Import tags as categories',
 			'rules' => 'trim|numeric|required'
-		),
-		array(
-			'field' => 'pages',
-			'label' => 'Import pages',
-			'rules' => 'trim|numeric|required'
-		),
+		)
 	);
 	
 	/**
@@ -63,11 +48,8 @@ class Admin extends Admin_Controller
 		$this->load->helper('html');
 		$this->load->model('blog/blog_categories_m');
 		$this->load->model('blog/blog_m');
-		$this->load->model('redirects/redirect_m');
-		$this->load->model('pages/pages_m');
 		$this->load->library('form_validation');
 		$this->lang->load('blog/blog');
-		$this->lang->load('redirects/redirects');
 		$this->config->load('tumblrimport_config');
 		$this->template->set_partial('shortcuts', 'admin/partials/shortcuts');
 	}
@@ -86,7 +68,6 @@ class Admin extends Admin_Controller
 
 			return FALSE;
 		}
-
 		// Strip end slashes
 		$url = preg_replace('/[\/]+$/', '', $url);
 
@@ -104,49 +85,24 @@ class Admin extends Admin_Controller
 		if ($this->form_validation->run())
 		{
 			require_once './addons/modules/tumblrimport/libraries/Importer.php';
-			require_once './addons/modules/tumblrimport/libraries/Importer/Tumblr.php';
-		
-			$driver = 'Tumblr';
 
-			$blog_url = $this->input->post('blog_url');
-			$importer_feeds = $this->config->item('tumblrimport_feeds');
+			$config = $this->input->post();
 
-			$driver_feeds = array();
-			foreach($importer_feeds[strtolower($driver)] as $type => $feed)
+			$result = Importer::factory('Tumblr', $config)
+				->import_posts();
+
+			if ($result === FALSE)
 			{
-				$driver_feeds[$type] = sprintf($feed, $blog_url);
-			}
+				$this->session->set_flashdata('error', 'Error loading XML feed.');
+				redirect('admin/tumblrimport');
+			} 
 
-			$importer = new $driver($blog_url, $driver_feeds);
-
-			$result = $importer->import_posts();
-			
-			$msg = array(
-				'saved' => sprintf('%s posts saved.', $result['saved']),
-				'skipped' => $result['skipped'] > 0 
-					? sprintf('%s skipped posts.', $result['skipped']) 
-					: '',
-				'duplicates' => $result['dupes'] > 0 
-					? sprintf('%s duplicates not saved.', $result['dupes']) 
-					: '',
-				'redirects' => $result['redirects'] > 0 
-					? sprintf('%s redirects saved.', $result['redirects']) 
-					: ''
+			$flashmsg = sprintf('Saved %s of %s posts.', 
+				$result['saved'],
+				$result['total_posts']
 			);
 
-			if (!!$this->input->post('pages') === TRUE)
-			{
-				$importer->import_pages();
-			}
-
-			$flashmsg = sprintf('%s %s %s %s', 
-				$msg['saved'], 
-				$msg['skipped'], 
-				$msg['duplicates'], 
-				$msg['redirects']
-			);
-
-			$this->session->set_flashdata($result['saved'] > 0 ? 'success' : 'error', $flashmsg);
+			$this->session->set_flashdata($result['saved'] ? 'success' : 'error', $flashmsg);
 
 			redirect('admin/tumblrimport');
 		}
@@ -160,9 +116,6 @@ class Admin extends Admin_Controller
 		// Default form values
 		$this->_default($data->blog_url, 'http://', FALSE);
 		$this->_default($data->status, 'draft', FALSE);
-		$this->_default($data->redirects, '1', FALSE);
-		$this->_default($data->posts, '1', FALSE);
-		$this->_default($data->pages, '1', FALSE);
 		$this->_default($data->categories, '1', FALSE);
 
 		// Load the view
@@ -174,7 +127,7 @@ class Admin extends Admin_Controller
 
 	private function _default(&$var, $val, $default)
 	{
-		if ($val === $default)
+		if ($var === $default)
 		{
 			$var = $val;
 		}
